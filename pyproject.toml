@@ -8,6 +8,8 @@ dependencies = [
     "uvicorn[standard]",
     "pydantic",
     "pydantic-settings",
+    "langgraph",
+    "langchain-openai",
 ]
 
 [project.optional-dependencies]
