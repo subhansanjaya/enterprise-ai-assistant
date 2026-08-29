@@ -8,9 +8,6 @@ retrieval_service = create_retrieval_service()
 async def retrieval_agent(state: AgentState) -> AgentState:
     query = state["messages"][-1]["content"]
 
-    print("\n--- RETRIEVAL AGENT ---")
-    print(f"Query: {query}")
-
     results = await retrieval_service.search(
         query=query,
         top_k=5,

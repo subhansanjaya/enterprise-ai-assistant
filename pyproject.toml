@@ -12,6 +12,8 @@ dependencies = [
     "langchain-openai",
     "pinecone",
     "rank-bm25",
+    "python-jose[cryptography]",
+    "httpx",
 ]
 
 [project.optional-dependencies]

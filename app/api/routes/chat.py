@@ -1,7 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.agents.graph import agent_graph
+from app.auth.dependencies import get_current_user
+from app.auth.models import AuthenticatedUser
 
 
 router = APIRouter()
@@ -9,8 +11,6 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     message: str
-    user_id: str = "demo-user"
-    user_role: str = "viewer"
 
 
 class ChatResponse(BaseModel):
@@ -18,7 +18,12 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    current_user: AuthenticatedUser = Depends(
+        get_current_user
+    ),
+) -> ChatResponse:
     state = {
         "messages": [
             {
@@ -26,8 +31,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 "content": request.message,
             }
         ],
-        "user_id": request.user_id,
-        "user_role": request.user_role,
+        "user_id": current_user.user_id,
+        "user_role": current_user.primary_role,
         "intent": "general",
         "retrieved_documents": [],
         "research_results": [],
@@ -39,4 +44,3 @@ async def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(
         answer=result["final_answer"],
     )
-    

@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     pinecone_api_key: str = ""
     pinecone_index_name: str = "enterprise-ai-assistant"
     pinecone_namespace: str = "internal"
+    
+    keycloak_url: str = "http://localhost:8080"
+    keycloak_realm: str = "enterprise-ai"
+    keycloak_client_id: str = "backend-api"
 
     embedding_model: str = "text-embedding-3-small"
 
