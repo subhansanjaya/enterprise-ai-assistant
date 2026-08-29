@@ -28,7 +28,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
         ],
         "user_id": request.user_id,
         "user_role": request.user_role,
-        "intent": "",
+        "intent": "general",
+        "retrieved_documents": [],
+        "research_results": [],
         "final_answer": "",
     }
 

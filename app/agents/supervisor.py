@@ -1,7 +1,18 @@
-from langchain_openai import ChatOpenAI
+from typing import Literal
 
-from app.config import settings
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
+
 from app.agents.state import AgentState
+from app.config import settings
+
+
+class RoutingDecision(BaseModel):
+    intent: Literal[
+        "general",
+        "knowledge_search",
+        "research",
+    ]
 
 
 llm = ChatOpenAI(
@@ -12,15 +23,22 @@ llm = ChatOpenAI(
 
 
 async def supervisor(state: AgentState) -> AgentState:
-    response = await llm.ainvoke(
+    structured_llm = llm.with_structured_output(RoutingDecision)
+
+    response = await structured_llm.ainvoke(
         [
             {
                 "role": "system",
                 "content": (
                     "You are the supervisor of an enterprise AI assistant. "
-                    "Understand the user's request and provide a concise intent "
-                    "classification. For now, classify requests as "
-                    "'general' unless they clearly require another capability."
+                    "Classify the user's request into exactly one of these "
+                    "categories:\n"
+                    "- general: casual conversation or questions that do "
+                    "not require organizational knowledge.\n"
+                    "- knowledge_search: questions that can be answered by "
+                    "searching organizational documents.\n"
+                    "- research: complex questions requiring investigation "
+                    "across multiple documents or sources."
                 ),
             },
             *state["messages"],
@@ -29,5 +47,5 @@ async def supervisor(state: AgentState) -> AgentState:
 
     return {
         **state,
-        "intent": response.content,
+        "intent": response.intent,
     }
