@@ -10,6 +10,8 @@ dependencies = [
     "pydantic-settings",
     "langgraph",
     "langchain-openai",
+    "pinecone",
+    "rank-bm25",
 ]
 
 [project.optional-dependencies]
