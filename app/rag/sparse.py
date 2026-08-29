@@ -59,13 +59,38 @@ class BM25Retriever:
             text.lower(),
         )
 
-    @staticmethod
+    @classmethod
     def _matches_filter(
+        cls,
         chunk: DocumentChunk,
         metadata_filter: dict,
     ) -> bool:
+        if "$and" in metadata_filter:
+            filters = metadata_filter["$and"]
+
+            return all(
+                cls._matches_filter(chunk, filter_item)
+                for filter_item in filters
+            )
+
         for key, expected_value in metadata_filter.items():
-            actual_value = getattr(chunk, key, None)
+            if key == "$and":
+                continue
+
+            actual_value = getattr(
+                chunk,
+                key,
+                None,
+            )
+
+            if isinstance(expected_value, dict):
+                if "$in" in expected_value:
+                    allowed_values = expected_value["$in"]
+
+                    if actual_value not in allowed_values:
+                        return False
+
+                    continue
 
             if actual_value != expected_value:
                 return False

@@ -1,9 +1,25 @@
+from app.auth.policy import build_access_filter
 from app.rag.embeddings import EmbeddingService
 from app.rag.hybrid import HybridRanker
 from app.rag.models import DocumentChunk
 from app.rag.pinecone import PineconeService
 from app.rag.results import RetrievalResult
 from app.rag.sparse import BM25Retriever
+
+
+def _merge_metadata_filters(
+    metadata_filter: dict | None,
+    access_filter: dict,
+) -> dict:
+    if metadata_filter is None:
+        return access_filter
+
+    return {
+        "$and": [
+            metadata_filter,
+            access_filter,
+        ]
+    }
 
 
 class RetrievalService:
@@ -24,15 +40,25 @@ class RetrievalService:
         query: str,
         top_k: int = 5,
         metadata_filter: dict | None = None,
+        roles: list[str] | None = None,
     ) -> list[RetrievalResult]:
         query_vector = await self._embedding_service.embed_query(
             query
         )
 
+        access_filter = build_access_filter(
+            roles or []
+        )
+
+        effective_filter = _merge_metadata_filters(
+            metadata_filter,
+            access_filter,
+        )
+
         dense_matches = self._pinecone_service.search(
             vector=query_vector,
             top_k=top_k,
-            filter=metadata_filter,
+            filter=effective_filter,
         )
 
         dense_results = [
@@ -54,7 +80,7 @@ class RetrievalService:
         sparse_results = self._sparse_retriever.search(
             query=query,
             top_k=top_k,
-            metadata_filter=metadata_filter,
+            metadata_filter=effective_filter,
         )
 
         return self._hybrid_ranker.rank(
