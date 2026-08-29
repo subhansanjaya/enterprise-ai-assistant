@@ -18,7 +18,6 @@ def route_after_supervisor(state: AgentState) -> str:
 
     return "response"
 
-
 def build_graph():
     graph = StateGraph(AgentState)
 

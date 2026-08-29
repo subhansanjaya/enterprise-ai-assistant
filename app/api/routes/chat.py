@@ -39,3 +39,4 @@ async def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(
         answer=result["final_answer"],
     )
+    
