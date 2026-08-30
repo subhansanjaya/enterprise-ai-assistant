@@ -15,7 +15,7 @@ from app.rag.sparse import BM25Retriever
 def test_knowledge_base_loads_chunks() -> None:
     knowledge_base = KnowledgeBase(Path("data"))
 
-    assert len(knowledge_base.chunks) == 10
+    assert len(knowledge_base.chunks) == 12
     assert isinstance(
         knowledge_base.sparse_retriever,
         BM25Retriever,

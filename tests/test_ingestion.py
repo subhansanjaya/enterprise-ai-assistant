@@ -9,7 +9,7 @@ DATA_DIR = Path("data")
 def test_load_markdown_documents() -> None:
     documents = load_markdown_documents(DATA_DIR)
 
-    assert len(documents) == 5
+    assert len(documents) == 7
 
     document_ids = {
         document.document_id
