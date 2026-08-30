@@ -252,9 +252,41 @@ pip install -e ".[dev]"
 
 ### Environment Variables
 
-Configure the required environment variables for OpenAI, Pinecone, PostgreSQL, and Keycloak according to the application's configuration.
+The application uses a `.env` file for backend configuration.
 
-Do not commit secrets or credentials to the repository.
+Create a `.env` file in the project root:
+
+```env
+OPENAI_API_KEY=your-openai-api-key
+
+PINECONE_API_KEY=your-pinecone-api-key
+PINECONE_INDEX_NAME=enterprise-ai-assistant
+PINECONE_NAMESPACE=internal
+
+KEYCLOAK_URL=http://localhost:8080
+KEYCLOAK_REALM=enterprise-ai
+KEYCLOAK_CLIENT_ID=backend-api
+KEYCLOAK_UI_CLIENT_ID=enterprise-ai-ui
+
+MCP_SERVER_URL=http://127.0.0.1:8001/mcp
+
+DATABASE_URL=postgresql+psycopg://keycloak:keycloak@localhost:5433/enterprise_ai
+
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+For optional LangSmith tracing:
+
+```env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=your-langsmith-api-key
+LANGSMITH_PROJECT=enterprise-ai-assistant
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+```
+
+The application also provides development defaults for several configuration values through `app/config.py`.
+
+Never commit `.env`, API keys, client secrets, or other credentials to the repository.
 
 ## Running the Application
 
