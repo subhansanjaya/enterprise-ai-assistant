@@ -7,6 +7,9 @@ from app.agents.citations import validate_citations
 from app.agents.state import AgentState
 from app.config import settings
 
+MAX_RESPONSE_LENGTH = 12000
+
+
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     api_key=settings.openai_api_key,
@@ -24,12 +27,15 @@ def build_response_prompt(
             {
                 "role": "system",
                 "content": (
-                    "You are an enterprise AI assistant. "
+                    "You are Commercial Bank's internal enterprise AI "
+                    "assistant. "
                     "Respond briefly and naturally to simple interactions "
                     "related to the assistant. "
-                    "Explain that you can help users search and investigate "
-                    "information from the organization's enterprise "
-                    "knowledge base. "
+                    "Explain that you can help authorized employees search "
+                    "and investigate information from Commercial Bank's "
+                    "enterprise knowledge base. "
+                    "Be professional and concise. "
+                    "Do not make unsupported claims about Commercial Bank. "
                     "Do not answer unrelated questions."
                 ),
             },
@@ -44,12 +50,14 @@ def build_response_prompt(
             {
                 "role": "system",
                 "content": (
-                    "You are an enterprise AI assistant. "
+                    "You are Commercial Bank's internal enterprise AI "
+                    "assistant. "
                     "The user's request is outside the scope of this "
                     "application. "
                     "Respond briefly that the assistant is designed to "
-                    "answer questions using the organization's enterprise "
-                    "knowledge base and cannot help with unrelated requests. "
+                    "answer questions using Commercial Bank's enterprise "
+                    "knowledge base and cannot help with unrelated "
+                    "requests. "
                     "Do not answer the user's unrelated question."
                 ),
             },
@@ -93,9 +101,15 @@ def build_response_prompt(
         {
             "role": "system",
             "content": (
-                "You are an enterprise AI assistant. "
-                "Answer the user's question using only the supplied evidence. "
-                "Do not invent facts.\n\n"
+                "You are Commercial Bank's internal enterprise AI "
+                "assistant.\n\n"
+                "Answer the user's question using only the supplied "
+                "evidence. "
+                "Do not invent facts or make unsupported claims about "
+                "Commercial Bank.\n\n"
+                "Protect Commercial Bank's confidential information and "
+                "do not provide information beyond the evidence supplied "
+                "for the current authorized user.\n\n"
                 "For research requests, use the supplied research findings "
                 "and their source documents. "
                 "Only cite Document IDs that appear in the supplied "
@@ -108,7 +122,9 @@ def build_response_prompt(
                 "For knowledge search requests, use the supplied documents "
                 "and cite the relevant Document ID.\n\n"
                 "If the evidence does not contain enough information, "
-                "say that you do not have enough information."
+                "say that you do not have enough information.\n\n"
+                "Be professional, concise, and appropriate for an "
+                "enterprise banking environment."
             ),
         },
         {
@@ -121,6 +137,45 @@ def build_response_prompt(
             ),
         },
     ]
+
+
+def validate_response(
+    answer: str,
+    state: AgentState,
+) -> None:
+    """Validate the generated response before returning it."""
+    if not answer.strip():
+        raise ValueError(
+            "The AI service returned an empty response."
+        )
+
+    if len(answer) > MAX_RESPONSE_LENGTH:
+        raise ValueError(
+            "The AI service returned an unexpectedly long response."
+        )
+
+    if state["intent"] in {
+        "knowledge_search",
+        "research",
+    }:
+        allowed_document_ids = {
+            document["document_id"]
+            for document in state.get(
+                "retrieved_documents",
+                [],
+            )
+        }
+
+        invalid_citations = validate_citations(
+            answer,
+            allowed_document_ids,
+        )
+
+        if invalid_citations:
+            raise ValueError(
+                "Response contains invalid document citations: "
+                + ", ".join(invalid_citations)
+            )
 
 
 async def response_agent(
@@ -171,28 +226,24 @@ async def response_agent(
 
     answer = response.content
 
-    if state["intent"] in {
-        "knowledge_search",
-        "research",
-    }:
-        allowed_document_ids = {
-            document["document_id"]
-            for document in state.get(
-                "retrieved_documents",
-                [],
-            )
-        }
-
-        invalid_citations = validate_citations(
-            answer,
-            allowed_document_ids,
+    try:
+        validate_response(
+            answer=answer,
+            state=state,
+        )
+    except ValueError as exc:
+        print(
+            "LLM RESPONSE VALIDATION ERROR:",
+            str(exc),
         )
 
-        if invalid_citations:
-            raise ValueError(
-                "Response contains invalid document citations: "
-                + ", ".join(invalid_citations)
-            )
+        return {
+            **state,
+            "final_answer": (
+                "I was unable to produce a valid response. "
+                "Please try again."
+            ),
+        }
 
     return {
         **state,
@@ -216,6 +267,7 @@ async def stream_response(
         return
 
     prompt = build_response_prompt(state)
+    answer_parts: list[str] = []
 
     try:
         async with asyncio.timeout(
@@ -223,6 +275,7 @@ async def stream_response(
         ):
             async for chunk in llm.astream(prompt):
                 if chunk.content:
+                    answer_parts.append(chunk.content)
                     yield chunk.content
 
     except TimeoutError:
@@ -230,6 +283,7 @@ async def stream_response(
             "The AI service took too long to respond. "
             "Please try again later."
         )
+        return
 
     except Exception as exc:  # noqa: BLE001
         print(
@@ -240,4 +294,18 @@ async def stream_response(
         yield (
             "The AI service is currently unavailable. "
             "Please try again later."
+        )
+        return
+
+    answer = "".join(answer_parts)
+
+    try:
+        validate_response(
+            answer=answer,
+            state=state,
+        )
+    except ValueError as exc:
+        print(
+            "LLM STREAM VALIDATION ERROR:",
+            str(exc),
         )
