@@ -19,28 +19,27 @@ class MCPClient:
         ) as (
             read_stream,
             write_stream,
-        ):
-            async with ClientSession(
-                read_stream,
-                write_stream,
-            ) as session:
-                await session.initialize()
+        ), ClientSession(
+            read_stream,
+            write_stream,
+        ) as session:
+            await session.initialize()
 
-                result = await session.call_tool(
-                    "search_documents",
-                    {
-                        "query": query,
-                        "roles": roles,
-                        "top_k": top_k,
-                    },
+            result = await session.call_tool(
+                "search_documents",
+                {
+                    "query": query,
+                    "roles": roles,
+                    "top_k": top_k,
+                },
+            )
+
+            if result.is_error:
+                raise RuntimeError(
+                    "MCP search_documents tool returned an error."
                 )
 
-                if result.is_error:
-                    raise RuntimeError(
-                        "MCP search_documents tool returned an error."
-                    )
-
-                return result.structured_content.get(
-                    "result",
-                    [],
-                )
+            return result.structured_content.get(
+                "result",
+                [],
+            )

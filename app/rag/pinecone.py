@@ -1,7 +1,6 @@
 from pinecone import Pinecone
 
 from app.config import settings
-from app.rag.models import DocumentChunk
 
 
 class PineconeService:

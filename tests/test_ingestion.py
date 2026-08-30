@@ -3,7 +3,6 @@ from pathlib import Path
 from app.rag.chunker import chunk_document
 from app.rag.loader import load_markdown_documents
 
-
 DATA_DIR = Path("data")
 
 

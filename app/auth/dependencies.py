@@ -4,7 +4,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.auth.keycloak import KeycloakAuthenticationService
 from app.auth.models import AuthenticatedUser
 
-
 security = HTTPBearer()
 
 

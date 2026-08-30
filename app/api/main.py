@@ -1,8 +1,7 @@
 from fastapi import FastAPI
 
-from app.config import settings
 from app.api.routes.chat import router as chat_router
-
+from app.config import settings
 
 app = FastAPI(
     title=settings.app_name,

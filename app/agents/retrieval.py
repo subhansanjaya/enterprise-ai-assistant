@@ -1,17 +1,23 @@
 from app.agents.state import AgentState
 from app.rag.service import create_retrieval_service
 
-
 retrieval_service = create_retrieval_service()
 
 
-async def retrieval_agent(state: AgentState) -> AgentState:
-    query = state["messages"][-1]["content"]
+async def retrieval_agent(
+    state: AgentState,
+) -> AgentState:
+    query = (
+        state.get("contextualized_query", "").strip()
+        or state["messages"][-1]["content"]
+    )
 
     results = await retrieval_service.search(
         query=query,
         top_k=5,
+        roles=state["user_roles"],
     )
+
 
     retrieved_documents = [
         {

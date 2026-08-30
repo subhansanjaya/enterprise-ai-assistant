@@ -83,8 +83,9 @@ class BM25Retriever:
                 None,
             )
 
-            if isinstance(expected_value, dict):
-                if "$in" in expected_value:
+            if ( isinstance(expected_value, dict)
+                    and "$in" in expected_value
+                ):
                     allowed_values = expected_value["$in"]
 
                     if actual_value not in allowed_values:

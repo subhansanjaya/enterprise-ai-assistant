@@ -1,6 +1,5 @@
 import re
 
-
 CITATION_PATTERN = re.compile(r"\[([A-Za-z0-9_-]+)\]")
 
 

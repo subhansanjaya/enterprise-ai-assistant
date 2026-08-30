@@ -3,10 +3,10 @@ from typing import Literal
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
+from app.agents.query_context import contextualize_query
 from app.agents.state import AgentState
 from app.config import settings
 from app.mcp.client import MCPClient
-
 
 MAX_RESEARCH_ITERATIONS = 3
 
@@ -17,7 +17,9 @@ llm = ChatOpenAI(
     temperature=0,
 )
 
+
 mcp_client = MCPClient()
+
 
 class ResearchFinding(BaseModel):
     finding: str
@@ -30,8 +32,15 @@ class ResearchEvaluation(BaseModel):
     findings: list[ResearchFinding]
 
 
-async def research_agent(state: AgentState) -> AgentState:
-    original_query = state["messages"][-1]["content"]
+async def research_agent(
+    state: AgentState,
+) -> AgentState:
+    state = await contextualize_query(state)
+
+    original_query = (
+        state.get("contextualized_query", "").strip()
+        or state["messages"][-1]["content"]
+    )
 
     research_query = (
         state.get("research_query", "").strip()
@@ -59,7 +68,7 @@ async def research_agent(state: AgentState) -> AgentState:
         for document in results
         if document["chunk_id"] not in existing_ids
     ]
-    
+
     new_document_count = len(new_documents)
 
     retrieved_documents = [
@@ -75,7 +84,7 @@ async def research_agent(state: AgentState) -> AgentState:
     research_iteration = (
         state.get("research_iteration", 0) + 1
     )
-    
+
     research_results = [
         {
             "finding": document["content"],
@@ -99,7 +108,6 @@ async def research_agent(state: AgentState) -> AgentState:
 async def evaluate_research(
     state: AgentState,
 ) -> AgentState:
-
     documents = state.get(
         "retrieved_documents",
         [],
@@ -116,9 +124,16 @@ async def evaluate_research(
 
     previous_queries = "\n".join(
         f"- {query}"
-        for query in state.get("research_queries", [])
+        for query in state.get(
+            "research_queries",
+            [],
+        )
     )
 
+    research_question = (
+        state.get("contextualized_query", "").strip()
+        or state["messages"][-1]["content"]
+    )
 
     evaluator = llm.with_structured_output(
         ResearchEvaluation
@@ -134,44 +149,45 @@ async def evaluate_research(
 
                     "Review the supplied documents and previous search queries.\n\n"
 
-                    "Produce concise research findings based only on the supplied "
-                    "evidence. Each finding must identify the Document IDs that "
-                    "support it.\n\n"
+                    "Produce concise research findings based only on the "
+                    "supplied evidence. Each finding must identify the "
+                    "Document IDs that support it.\n\n"
 
-                    "If the evidence is sufficient to answer the research question "
-                    "reliably, set sufficient=true and leave follow_up_query empty.\n\n"
+                    "If the evidence is sufficient to answer the research "
+                    "question reliably, set sufficient=true and leave "
+                    "follow_up_query empty.\n\n"
 
-                    "If the evidence is insufficient, set sufficient=false and "
-                    "provide ONE focused follow-up search query that targets "
-                    "genuinely missing information.\n\n"
+                    "If the evidence is insufficient, set sufficient=false "
+                    "and provide ONE focused follow-up search query that "
+                    "targets genuinely missing information.\n\n"
 
                     "IMPORTANT:\n"
                     "- Do not invent facts.\n"
                     "- Do not create findings unsupported by the evidence.\n"
-                    "- Every finding must have at least one supporting Document ID.\n"
+                    "- Every finding must have at least one supporting "
+                    "Document ID.\n"
                     "- Use exact Document IDs from the supplied evidence.\n"
                     "- Do not repeat or paraphrase a previous search query.\n"
-                    "- Do not request information already present in the evidence.\n"
-                    "- If additional searches are unlikely to provide materially "
-                    "different evidence, set sufficient=true."
+                    "- Do not request information already present in the "
+                    "evidence.\n"
+                    "- If additional searches are unlikely to provide "
+                    "materially different evidence, set sufficient=true."
                 ),
             },
             {
                 "role": "user",
                 "content": (
                     f"Research question:\n"
-                    f"{state['messages'][-1]['content']}\n\n"
+                    f"{research_question}\n\n"
                     f"Previous search queries:\n"
                     f"{previous_queries}\n\n"
                     f"Evidence collected so far:\n"
                     f"{evidence}"
                 ),
-            }
-
+            },
         ]
     )
-    
-    
+
     return {
         **state,
         "research_results": [
@@ -180,18 +196,21 @@ async def evaluate_research(
         ],
         "research_evaluation": {
             "sufficient": response.sufficient,
-            "follow_up_query": response.follow_up_query.strip(),
+            "follow_up_query": (
+                response.follow_up_query.strip()
+            ),
         },
-        "research_query": response.follow_up_query.strip(),
+        "research_query": (
+            response.follow_up_query.strip()
+        ),
     }
-
 
 
 def route_after_research_evaluation(
     state: AgentState,
 ) -> Literal["research", "response"]:
     if state["research_new_documents"] == 0:
-     return "response"
+        return "response"
 
     if state["research_iteration"] >= MAX_RESEARCH_ITERATIONS:
         return "response"

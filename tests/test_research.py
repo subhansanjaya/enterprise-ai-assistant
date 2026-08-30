@@ -3,7 +3,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.agents.research import (
-    evaluate_research,
     research_agent,
     route_after_research_evaluation,
 )

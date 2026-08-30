@@ -1,5 +1,6 @@
-from mcp_server.server import search_documents
 import pytest
+
+from mcp_server.server import search_documents
 
 
 def test_mcp_viewer_only_gets_internal_documents() -> None:

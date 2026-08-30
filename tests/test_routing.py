@@ -1,7 +1,10 @@
-from app.agents.graph import route_after_supervisor
+from app.agents.graph import (
+    route_after_context,
+    route_after_supervisor,
+)
 
 
-def test_routes_knowledge_search_to_retrieval() -> None:
+def test_routes_knowledge_search_to_query_context() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
@@ -13,10 +16,10 @@ def test_routes_knowledge_search_to_retrieval() -> None:
         "research_evaluation": {},
     }
 
-    assert route_after_supervisor(state) == "retrieval"
+    assert route_after_supervisor(state) == "query_context"
 
 
-def test_routes_research_to_research_agent() -> None:
+def test_routes_research_to_query_context() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
@@ -28,33 +31,34 @@ def test_routes_research_to_research_agent() -> None:
         "research_evaluation": {},
     }
 
-    assert route_after_supervisor(state) == "research"
+    assert route_after_supervisor(state) == "query_context"
 
 
-def test_routes_general_to_response() -> None:
+def test_routes_knowledge_search_from_context_to_retrieval() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
         "user_roles": ["viewer"],
-        "intent": "general",
+        "intent": "knowledge_search",
         "retrieved_documents": [],
         "research_results": [],
         "final_answer": "",
         "research_evaluation": {},
     }
 
-    assert route_after_supervisor(state) == "response"
-    
-def test_unknown_intent_defaults_to_response() -> None:
+    assert route_after_context(state) == "retrieval"
+
+
+def test_routes_research_from_context_to_research_agent() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
-        "user_roles": ["viewer"],
-        "intent": "general",
+        "user_roles": ["analyst"],
+        "intent": "research",
         "retrieved_documents": [],
         "research_results": [],
         "final_answer": "",
         "research_evaluation": {},
     }
 
-    assert route_after_supervisor(state) == "response"
+    assert route_after_context(state) == "research"

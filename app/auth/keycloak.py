@@ -1,9 +1,8 @@
-from jose import jwt
 import httpx
+from jose import jwt
 
 from app.auth.models import AuthenticatedUser
 from app.config import settings
-
 
 APPLICATION_ROLES = {
     "viewer",

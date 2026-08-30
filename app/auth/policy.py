@@ -1,6 +1,5 @@
 from typing import Final
 
-
 ROLE_ACCESS_LEVELS: Final[dict[str, set[str]]] = {
     "viewer": {"internal"},
     "analyst": {"internal", "restricted"},

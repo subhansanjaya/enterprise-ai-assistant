@@ -1,7 +1,6 @@
 import requests
 import streamlit as st
 
-
 st.set_page_config(
     page_title="Enterprise AI Assistant",
     page_icon="🤖",
@@ -95,86 +94,116 @@ if prompt:
         ),
     }
 
+    status_placeholder = st.empty()
+
     try:
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response = requests.post(
-                    f"{API_URL}/chat",
-                    headers={
-                        "Authorization": (
-                            f"Bearer {access_token}"
-                        )
-                    },
-                    json=payload,
-                    timeout=120,
+        status_placeholder.caption("Thinking...")
+
+        response = requests.post(
+            f"{API_URL}/chat/stream",
+            headers={
+                "Authorization": (
+                    f"Bearer {access_token}"
+                ),
+                "Accept": "text/event-stream",
+            },
+            json=payload,
+            stream=True,
+            timeout=120,
+        )
+
+        if response.status_code == 401:
+            status_placeholder.empty()
+
+            st.warning(
+                "Your session has expired. "
+                "Please log in again."
+            )
+
+            st.logout()
+            st.stop()
+
+        if response.status_code != 200:
+            status_placeholder.empty()
+
+            st.error(
+                f"Request failed: "
+                f"{response.status_code}"
+            )
+
+            st.code(response.text)
+            st.stop()
+
+        answer_parts: list[str] = []
+        conversation_id = None
+        event_type = None
+
+        answer_placeholder = None
+
+        for line in response.iter_lines(
+            decode_unicode=True
+        ):
+            if not line:
+                continue
+
+            if line.startswith("event:"):
+                event_type = line.removeprefix(
+                    "event: "
+                )
+                continue
+
+            if not line.startswith("data:"):
+                continue
+
+            data = line.removeprefix(
+                "data: "
+            )
+
+            if event_type == "token":
+                answer_parts.append(data)
+
+                if answer_placeholder is None:
+                    status_placeholder.empty()
+
+                    with st.chat_message(
+                        "assistant"
+                    ):
+                        answer_placeholder = st.empty()
+
+                answer_placeholder.markdown(
+                    "".join(answer_parts)
                 )
 
-            if response.status_code == 401:
-                st.error(
-                    "Authentication failed. "
-                    "Please log in again."
-                )
-                st.stop()
+            elif event_type == "metadata":
+                conversation_id = data
 
-            if response.status_code != 200:
-                st.error(
-                    f"Request failed: "
-                    f"{response.status_code}"
-                )
-                st.code(response.text)
-                st.stop()
+            elif event_type == "done":
+                break
 
-            data = response.json()
+        answer = "".join(answer_parts)
 
+        if conversation_id:
             st.session_state.conversation_id = (
-                data["conversation_id"]
+                conversation_id
             )
 
-            answer = data["answer"]
-
-            st.markdown(answer)
-
-            st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": answer,
-                }
-            )
-
-            sources = data.get("sources", [])
-
-            if sources:
-                st.divider()
-                st.subheader("Sources")
-
-                seen = set()
-
-                for source in sources:
-                    document_id = source["document_id"]
-
-                    if document_id in seen:
-                        continue
-
-                    seen.add(document_id)
-
-                    with st.container(border=True):
-                        st.markdown(
-                            f"**{document_id}**"
-                        )
-
-                        st.caption(
-                            f"{source['document_type']} • "
-                            f"{source['department']} • "
-                            f"{source['access_level']} • "
-                            f"{source['created_date']}"
-                        )
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": answer,
+            }
+        )
 
     except requests.exceptions.ConnectionError:
+        status_placeholder.empty()
+
         st.error(
             "Unable to connect to the FastAPI backend."
         )
 
     except requests.exceptions.Timeout:
+        status_placeholder.empty()
+
         st.error(
             "The request timed out."
         )

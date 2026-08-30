@@ -1,15 +1,15 @@
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.rag.embeddings import EmbeddingService
 from app.rag.hybrid import HybridRanker
 from app.rag.knowledge_base import KnowledgeBase
-from app.rag.sparse import BM25Retriever
-from app.rag.embeddings import EmbeddingService
 from app.rag.models import DocumentChunk
 from app.rag.pinecone import PineconeService
 from app.rag.retrieval import RetrievalService
-from unittest.mock import AsyncMock, MagicMock
+from app.rag.sparse import BM25Retriever
 
 
 def test_knowledge_base_loads_chunks() -> None:
