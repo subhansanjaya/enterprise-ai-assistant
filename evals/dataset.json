@@ -1,0 +1,38 @@
+[
+  {
+    "id": "EVAL-001",
+    "question": "What payment incidents happened in 2025?",
+    "expected_documents": [
+      "INC-2025-001",
+      "INC-2025-017"
+    ]
+  },
+  {
+    "id": "EVAL-002",
+    "question": "Which payment incident in 2025 was the most recent?",
+    "expected_documents": [
+      "INC-2025-017"
+    ]
+  },
+  {
+    "id": "EVAL-003",
+    "question": "What caused the May 2025 payment incident?",
+    "expected_documents": [
+      "INC-2025-017"
+    ]
+  },
+  {
+    "id": "EVAL-004",
+    "question": "What is the payment platform architecture?",
+    "expected_documents": [
+      "ARCH-2025-003"
+    ]
+  },
+  {
+    "id": "EVAL-005",
+    "question": "How should the payment gateway be recovered after an incident?",
+    "expected_documents": [
+      "RUN-2025-004"
+    ]
+  }
+]

@@ -1,5 +1,6 @@
 import asyncio
 
+from langsmith import traceable
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
@@ -11,14 +12,29 @@ class MCPClient:
         self._url = settings.mcp_server_url
         self._timeout_seconds = settings.mcp_timeout_seconds
 
+    @traceable(
+        name="MCP search_documents",
+        run_type="tool",
+    )
     async def search_documents(
         self,
         query: str,
         roles: list[str],
         top_k: int = 5,
     ) -> list[dict]:
+        print(
+            "MCP CLIENT SEARCH:",
+            {
+                "query": query,
+                "roles": roles,
+                "top_k": top_k,
+            },
+        )
+
         try:
-            async with asyncio.timeout(self._timeout_seconds):
+            async with asyncio.timeout(
+                self._timeout_seconds
+            ):
                 async with streamable_http_client(
                     self._url
                 ) as (
@@ -44,65 +60,29 @@ class MCPClient:
                             "MCP search_documents tool returned an error."
                         )
 
-                    return result.structured_content.get(
+                    documents = result.structured_content.get(
                         "result",
                         [],
                     )
 
+                    print(
+                        "MCP CLIENT RESULTS:",
+                        len(documents),
+                    )
+
+                    return documents
+
         except TimeoutError as exc:
+            print("MCP CLIENT TIMEOUT")
             raise RuntimeError(
                 "The MCP search service timed out."
             ) from exc
 
         except Exception as exc:
+            print(
+                "MCP CLIENT ERROR:",
+                type(exc).__name__,
+            )
             raise RuntimeError(
                 "The MCP search service is currently unavailable."
-            ) from exc
-
-    async def analyze_documents(
-        self,
-        documents: list[dict],
-        operation: str,
-        field: str = "document_id",
-    ) -> dict:
-        try:
-            async with asyncio.timeout(self._timeout_seconds):
-                async with streamable_http_client(
-                    self._url
-                ) as (
-                    read_stream,
-                    write_stream,
-                ), ClientSession(
-                    read_stream,
-                    write_stream,
-                ) as session:
-                    await session.initialize()
-
-                    result = await session.call_tool(
-                        "analyze_documents",
-                        {
-                            "documents": documents,
-                            "operation": operation,
-                            "field": field,
-                        },
-                    )
-
-                    if result.is_error:
-                        raise RuntimeError(
-                            "MCP analyze_documents tool returned an error."
-                        )
-
-                    return result.structured_content.get(
-                        "result",
-                        {},
-                    )
-
-        except TimeoutError as exc:
-            raise RuntimeError(
-                "The MCP analysis service timed out."
-            ) from exc
-
-        except Exception as exc:
-            raise RuntimeError(
-                "The MCP analysis service is currently unavailable."
             ) from exc
