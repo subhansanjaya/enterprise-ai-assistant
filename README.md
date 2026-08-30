@@ -8,8 +8,6 @@ The application combines hybrid Retrieval-Augmented Generation (RAG), role-based
 
 ![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/capture2.png)
 
-![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/capture3.png)
-
 ## Key Features
 
 - **Enterprise Knowledge Search** — semantic search with embeddings and Pinecone, BM25 keyword retrieval, and hybrid ranking.
