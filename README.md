@@ -4,9 +4,9 @@ An enterprise-focused AI assistant for authenticated users to search and investi
 
 The application combines hybrid Retrieval-Augmented Generation (RAG), role-based access control, LangGraph-based agent orchestration, conversational context, citation validation, MCP integration, structured analysis, streaming responses, rate limiting, failure handling, and LangSmith observability.
 
-![screenshot](https://github.com/subhansanjaya/ai-assisted-dev-toolkit/blob/main/assets/capture1.png)
-![screenshot](https://github.com/subhansanjaya/ai-assisted-dev-toolkit/blob/main/assets/capture2.png)
-![screenshot](https://github.com/subhansanjaya/ai-assisted-dev-toolkit/blob/main/assets/capture3.png)
+![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/assets/capture1.png)
+![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/assets/capture2.png)
+![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/assets/capture3.png)
 
 ## Key Features
 
