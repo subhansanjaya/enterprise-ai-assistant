@@ -5,11 +5,12 @@ def test_routes_knowledge_search_to_retrieval() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
-        "user_role": "viewer",
+        "user_roles": ["viewer"],
         "intent": "knowledge_search",
         "retrieved_documents": [],
         "research_results": [],
         "final_answer": "",
+        "research_evaluation": {},
     }
 
     assert route_after_supervisor(state) == "retrieval"
@@ -19,11 +20,12 @@ def test_routes_research_to_research_agent() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
-        "user_role": "analyst",
+        "user_roles": ["analyst"],
         "intent": "research",
         "retrieved_documents": [],
         "research_results": [],
         "final_answer": "",
+        "research_evaluation": {},
     }
 
     assert route_after_supervisor(state) == "research"
@@ -33,11 +35,12 @@ def test_routes_general_to_response() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
-        "user_role": "viewer",
+        "user_roles": ["viewer"],
         "intent": "general",
         "retrieved_documents": [],
         "research_results": [],
         "final_answer": "",
+        "research_evaluation": {},
     }
 
     assert route_after_supervisor(state) == "response"
@@ -46,11 +49,12 @@ def test_unknown_intent_defaults_to_response() -> None:
     state = {
         "messages": [],
         "user_id": "test-user",
-        "user_role": "viewer",
+        "user_roles": ["viewer"],
         "intent": "general",
         "retrieved_documents": [],
         "research_results": [],
         "final_answer": "",
+        "research_evaluation": {},
     }
 
     assert route_after_supervisor(state) == "response"

@@ -19,6 +19,7 @@ def test_chat_endpoint() -> None:
 
     mock_result = {
         "final_answer": "Hello from the assistant.",
+        "retrieved_documents": [],
     }
 
     try:
@@ -38,7 +39,8 @@ def test_chat_endpoint() -> None:
 
         assert response.status_code == 200
         assert response.json() == {
-            "answer": "Hello from the assistant."
+            "answer": "Hello from the assistant.",
+            "sources": [],
         }
 
     finally:

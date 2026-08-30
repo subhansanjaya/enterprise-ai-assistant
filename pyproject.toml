@@ -14,6 +14,7 @@ dependencies = [
     "rank-bm25",
     "python-jose[cryptography]",
     "httpx",
+    "mcp[cli]",
 ]
 
 [project.optional-dependencies]

@@ -5,6 +5,13 @@ from app.auth.models import AuthenticatedUser
 from app.config import settings
 
 
+APPLICATION_ROLES = {
+    "viewer",
+    "analyst",
+    "admin",
+}
+
+
 class KeycloakAuthenticationService:
     def __init__(self) -> None:
         self._issuer = (
@@ -54,15 +61,23 @@ class KeycloakAuthenticationService:
         user_id = payload.get("sub")
 
         if not user_id:
-            raise ValueError("Token does not contain a subject.")
+            raise ValueError(
+                "Token does not contain a subject."
+            )
 
-        roles = payload.get(
+        keycloak_roles = payload.get(
             "realm_access",
             {},
         ).get(
             "roles",
             [],
         )
+
+        roles = [
+            role
+            for role in keycloak_roles
+            if role in APPLICATION_ROLES
+        ]
 
         return AuthenticatedUser(
             user_id=user_id,

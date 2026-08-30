@@ -13,29 +13,23 @@ async def retrieval_agent(state: AgentState) -> AgentState:
         top_k=5,
     )
 
-    print(f"Results: {len(results)}")
-
     for result in results:
-        print(
-            f"- {result.chunk.document_id} "
-            f"(hybrid={result.hybrid_score:.4f})"
-        )
 
-    retrieved_documents = [
-        {
-            "chunk_id": result.chunk.chunk_id,
-            "document_id": result.chunk.document_id,
-            "document_type": result.chunk.document_type,
-            "department": result.chunk.department,
-            "access_level": result.chunk.access_level,
-            "created_date": result.chunk.created_date,
-            "content": result.chunk.content,
-            "dense_score": result.dense_score,
-            "sparse_score": result.sparse_score,
-            "hybrid_score": result.hybrid_score,
-        }
-        for result in results
-    ]
+        retrieved_documents = [
+            {
+                "chunk_id": result.chunk.chunk_id,
+                "document_id": result.chunk.document_id,
+                "document_type": result.chunk.document_type,
+                "department": result.chunk.department,
+                "access_level": result.chunk.access_level,
+                "created_date": result.chunk.created_date,
+                "content": result.chunk.content,
+                "dense_score": result.dense_score,
+                "sparse_score": result.sparse_score,
+                "hybrid_score": result.hybrid_score,
+            }
+            for result in results
+        ]
 
     return {
         **state,
