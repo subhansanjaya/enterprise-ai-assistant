@@ -57,10 +57,13 @@ async def response_agent(state: AgentState) -> AgentState:
                 "Only cite Document IDs that appear in the supplied "
                 "source documents.\n\n"
 
+                "Citations must use this exact format: [DOCUMENT-ID].\n"
+                "Replace DOCUMENT-ID with the actual Document ID from the supplied evidence.\n"
+                "Never write 'DOCUMENT-ID:' inside the brackets.\n"
+                "Do not use labels such as [DOCUMENT-ID: ...].\n\n"
+
                 "For knowledge search requests, use the supplied documents "
                 "and cite the relevant Document ID.\n\n"
-
-                "Citations must use this format: [DOCUMENT-ID].\n\n"
 
                 "If the evidence does not contain enough information, "
                 "say that you do not have enough information."

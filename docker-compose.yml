@@ -2,12 +2,18 @@ services:
   postgres:
     image: postgres:16
     container_name: enterprise-ai-postgres
+
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: keycloak
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
     volumes:
       - keycloak-postgres-data:/var/lib/postgresql/data
+
     restart: unless-stopped
 
   keycloak:

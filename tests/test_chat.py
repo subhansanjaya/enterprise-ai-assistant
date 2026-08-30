@@ -38,10 +38,11 @@ def test_chat_endpoint() -> None:
             )
 
         assert response.status_code == 200
-        assert response.json() == {
-            "answer": "Hello from the assistant.",
-            "sources": [],
-        }
+        body = response.json()
+
+        assert body["answer"] == "Hello from the assistant."
+        assert body["sources"] == []
+        assert body["conversation_id"]
 
     finally:
         app.dependency_overrides.clear()

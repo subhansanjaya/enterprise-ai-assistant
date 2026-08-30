@@ -15,6 +15,11 @@ dependencies = [
     "python-jose[cryptography]",
     "httpx",
     "mcp[cli]",
+    "streamlit[auth]",
+    "requests",
+    "sqlalchemy",
+    "psycopg[binary]",
+    "streamlit[auth]",
 ]
 
 [project.optional-dependencies]
