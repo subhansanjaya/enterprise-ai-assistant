@@ -47,6 +47,8 @@ def build_state(
     messages: list[dict[str, str]],
     current_user: AuthenticatedUser,
 ) -> dict:
+    # Pass authenticated identity and roles into the agent state so
+    # downstream retrieval and MCP operations can enforce access control.
     return {
         "messages": messages,
         "user_id": current_user.user_id,
@@ -72,6 +74,8 @@ def load_conversation(
     request: ChatRequest,
     current_user: AuthenticatedUser,
 ):
+    # get_conversation checks both the conversation ID and user ID,
+    # preventing users from accessing another user's conversation.
     if request.conversation_id:
         conversation = get_conversation(
             db=db,
@@ -99,6 +103,8 @@ def prepare_messages(
     conversation,
     request: ChatRequest,
 ) -> list[dict[str, str]]:
+    # Persist the user's message in PostgreSQL while also constructing
+    # the message history used by the agent workflow.
     previous_messages = get_messages(
         db=db,
         conversation=conversation,
@@ -140,6 +146,7 @@ async def chat(
     ),
     db: Session = Depends(get_db),
 ) -> ChatResponse:
+    # Apply per-user rate limiting before executing the agent workflow.
     if not await rate_limiter.allow(current_user.user_id):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -203,6 +210,7 @@ async def chat_stream(
     ),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
+    # Streaming requests use the same per-user rate limit as normal chat.
     if not await rate_limiter.allow(current_user.user_id):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -226,11 +234,12 @@ async def chat_stream(
         current_user=current_user,
     )
 
+    # Run the non-streaming preparation graph first, then stream only
+    # the final response so the UI can display tokens progressively.
     async def event_stream() -> AsyncIterator[str]:
         prepared_state = await preparation_graph.ainvoke(
             state
         )
-
 
         answer_parts: list[str] = []
 
@@ -246,6 +255,7 @@ async def chat_stream(
 
         answer = "".join(answer_parts)
 
+        # Persist the complete generated response after streaming finishes.
         add_message(
             db=db,
             conversation=conversation,

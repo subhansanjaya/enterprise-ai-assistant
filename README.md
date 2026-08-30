@@ -374,6 +374,7 @@ enterprise-ai-assistant/
 │   ├── 002-production-hardening.md
 │   └── 003-research-and-analysis.md
 ├── tests/
+├── evals/
 ├── streamlit_app.py
 ├── architecture.md
 ├── pyproject.toml
@@ -510,7 +511,7 @@ How many payment incidents occurred in 2025?
 ### Out of Scope
 
 ```text
-What is the capital of France?
+What is the capital of Sri Lanka?
 ```
 
 This should be identified as outside the enterprise knowledge-base scope rather than answered using external knowledge.

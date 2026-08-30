@@ -1,3 +1,4 @@
+import os
 import requests
 import streamlit as st
 
@@ -7,10 +8,14 @@ st.set_page_config(
     layout="wide",
 )
 
+# Backend URL is configurable per environment.
+API_URL = os.getenv(
+    "API_URL",
+    "http://127.0.0.1:8000",
+)
 
-API_URL = "http://127.0.0.1:8000"
-
-
+# Require an authenticated Keycloak/OIDC session before
+# exposing the enterprise assistant.
 if not st.user.is_logged_in:
     st.title("Enterprise AI Assistant")
 
@@ -50,7 +55,8 @@ st.caption(
     "Ask questions about your enterprise knowledge base."
 )
 
-
+# Conversation state is maintained by the Streamlit session
+# while the backend persists the conversation in PostgreSQL.
 if "conversation_id" not in st.session_state:
     st.session_state.conversation_id = None
 
@@ -79,6 +85,8 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Pass the Keycloak access token to the FastAPI backend
+    # for authentication and authorization.
     access_token = st.user.tokens.get("access")
 
     if not access_token:
@@ -99,6 +107,8 @@ if prompt:
     try:
         status_placeholder.caption("Thinking...")
 
+        # Use the streaming endpoint so generated tokens
+        # can be displayed progressively in the UI.
         response = requests.post(
             f"{API_URL}/chat/stream",
             headers={
@@ -140,6 +150,8 @@ if prompt:
 
         answer_placeholder = None
 
+        # Parse the Server-Sent Events stream produced by
+        # the FastAPI /chat/stream endpoint.
         for line in response.iter_lines(
             decode_unicode=True
         ):

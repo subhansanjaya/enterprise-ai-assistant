@@ -8,7 +8,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-
+# Register the API routes exposed by the application.
 app.include_router(chat_router)
 
 
