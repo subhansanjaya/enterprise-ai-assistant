@@ -5,7 +5,9 @@ An enterprise-focused AI assistant for authenticated users to search and investi
 The application combines hybrid Retrieval-Augmented Generation (RAG), role-based access control, LangGraph-based agent orchestration, conversational context, citation validation, MCP integration, structured analysis, streaming responses, rate limiting, failure handling, and LangSmith observability.
 
 ![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/capture1.png)
+
 ![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/capture2.png)
+
 ![screenshot](https://github.com/subhansanjaya/enterprise-ai-assistant/blob/main/capture3.png)
 
 ## Key Features
@@ -476,6 +478,16 @@ Run the complete test suite:
 pytest
 ```
 
+A lightweight retrieval evaluation suite is included under `evals/`.
+
+The evaluation uses a representative dataset of questions with expected
+document IDs and measures **Recall@5** to validate retrieval quality.
+
+Run the evaluation with:
+
+```bash
+ pytest evals/test_retrieval_evaluation.py -s   
+```
 Run Ruff:
 
 ```bash
@@ -545,9 +557,3 @@ Current specifications:
 - `specs/003-research-and-analysis.md` — research, MCP, contextual follow-up, structured analysis, evidence aggregation, and citation behavior.
 
 The specifications are kept alongside the implementation so design intent and delivered behavior can be reviewed together.
-
-## Current Status
-
-The core enterprise assistant workflow is implemented and covered by automated tests and linting.
-
-The application currently supports authenticated enterprise users, role-based document access, hybrid document retrieval, research workflows, MCP integration, contextual follow-up questions, citation validation, streaming responses, persistent conversations, per-user rate limiting, dependency failure handling, structured analysis, LangSmith observability, and automated testing/linting.
