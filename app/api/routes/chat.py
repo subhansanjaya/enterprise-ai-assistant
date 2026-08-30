@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from app.agents.graph import (
     preparation_graph,
 )
 from app.agents.response import stream_response
+from app.api.rate_limit import rate_limiter
 from app.auth.dependencies import get_current_user
 from app.auth.models import AuthenticatedUser
 from app.db.database import get_db
@@ -137,6 +138,11 @@ async def chat(
     ),
     db: Session = Depends(get_db),
 ) -> ChatResponse:
+    if not await rate_limiter.allow(current_user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please try again later.",
+        )
 
     conversation = load_conversation(
         db=db,
@@ -195,6 +201,11 @@ async def chat_stream(
     ),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
+    if not await rate_limiter.allow(current_user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please try again later.",
+        )
 
     conversation = load_conversation(
         db=db,
