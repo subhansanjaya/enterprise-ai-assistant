@@ -220,3 +220,11 @@ if prompt:
         st.error(
             "The request timed out."
         )
+        
+    except requests.exceptions.ChunkedEncodingError:
+        status_placeholder.empty()
+
+        st.error(
+            "The assistant could not complete the response. "
+            "Please try again."
+        )
