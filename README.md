@@ -2,7 +2,7 @@
 
 An enterprise-focused AI assistant for authenticated users to search and investigate information from an organization's internal knowledge base.
 
-The application combines hybrid Retrieval-Augmented Generation (RAG), role-based access control, LangGraph-based agent orchestration, conversational context, citation validation, and streaming responses.
+The application combines hybrid Retrieval-Augmented Generation (RAG), role-based access control, LangGraph-based agent orchestration, conversational context, citation validation, MCP integration, structured analysis, streaming responses, rate limiting, failure handling, and LangSmith observability.
 
 ## Key Features
 
@@ -12,60 +12,63 @@ The application combines hybrid Retrieval-Augmented Generation (RAG), role-based
 - **Conversational Context** — PostgreSQL conversation persistence and contextualized follow-up questions.
 - **Citations** — answers cite supporting enterprise documents using document IDs, with citation validation.
 - **Streaming** — responses can be streamed incrementally to the Streamlit interface.
+- **MCP Integration** — a narrowly scoped MCP client/server boundary for enterprise document search.
+- **Structured Analysis** — deterministic analysis capabilities for structured enterprise data.
+- **Rate Limiting** — per-user token-bucket rate limiting at the API boundary.
+- **Failure Handling** — controlled handling of LLM, retrieval, MCP, timeout, validation, and authorization failures.
+- **Observability** — LangSmith tracing and a user-facing Streamlit activity view.
 - **Out-of-Scope Handling** — unrelated requests are identified and rejected rather than answered using external knowledge.
 
 ## Architecture
 
 ```text
-                         ┌──────────────────────┐
-                         │      Streamlit       │
-                         │         UI           │
-                         └──────────┬───────────┘
-                                    │ HTTP / SSE
-                                    ▼
-                         ┌──────────────────────┐
-                         │       FastAPI        │
-                         │      REST API        │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │      Keycloak        │
-                         │ Authentication/RBAC  │
-                         └──────────────────────┘
+                           ┌──────────────────────┐
+                           │        User          │
+                           └──────────┬───────────┘
+                                      │
+                                      ▼
+                           ┌──────────────────────┐
+                           │      Streamlit       │
+                           │   Chat + Activity    │
+                           └──────────┬───────────┘
+                                      │ HTTP / SSE
+                                      ▼
+                           ┌──────────────────────┐
+                           │       FastAPI        │
+                           │ Auth / Validation    │
+                           │ Rate Limiting        │
+                           │ Error Handling       │
+                           └──────────┬───────────┘
+                                      │
+                                      ▼
+                           ┌──────────────────────┐
+                           │      LangGraph       │
+                           │      Supervisor      │
+                           └──────────┬───────────┘
+                                      │
+                         ┌────────────┼────────────┐
+                         ▼            ▼            ▼
+                   Context      Retrieval      Research
+                    Agent         Agent          Agent
+                         │            │            │
+                         │            ▼            ▼
+                         │        Hybrid RAG    MCP Search
+                         │            │            │
+                         └────────────┴────────────┘
+                                      │
+                                      ▼
+                               Response Agent
+                                      │
+                                      ▼
+                               Citation Validation
+                                      │
+                                      ▼
+                                  Final Answer
 
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │      LangGraph       │
-                         │   Agent Workflow     │
-                         └──────────┬───────────┘
-                                    │
-                 ┌──────────────────┼──────────────────┐
-                 │                  │                  │
-                 ▼                  ▼                  ▼
-          ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-          │ Supervisor  │    │   Context   │    │  Response   │
-          └──────┬──────┘    └─────────────┘    └─────────────┘
-                 │
-          ┌──────┴──────────────┐
-          ▼                     ▼
-   ┌─────────────┐       ┌─────────────┐
-   │  Retrieval  │       │   Research  │
-   └──────┬──────┘       └──────┬──────┘
-          │                     │
-          └──────────┬──────────┘
-                     ▼
-          ┌──────────────────────────────┐
-          │           RAG Layer          │
-          │ Pinecone + BM25 + Hybrid    │
-          └──────────────────────────────┘
-
-                    ┌─────────────────┐
-                    │   PostgreSQL    │
-                    │ Conversations   │
-                    │   & Messages    │
-                    └─────────────────┘
+       ┌────────────────┐   ┌────────────────┐   ┌────────────────┐
+       │   Pinecone     │   │  PostgreSQL    │   │  LangSmith     │
+       │ Vector Search  │   │ Conversations  │   │  Observability │
+       └────────────────┘   └────────────────┘   └────────────────┘
 ```
 
 ## Agent Workflow
@@ -73,24 +76,48 @@ The application combines hybrid Retrieval-Augmented Generation (RAG), role-based
 ### Knowledge Search
 
 ```text
-User question → Supervisor → Query Contextualization → Hybrid Retrieval
-→ Response Generation → Citation Validation → Answer
+User question
+    ↓
+Supervisor
+    ↓
+Contextualization when required
+    ↓
+Hybrid Retrieval
+    ↓
+Response Generation
+    ↓
+Citation Validation
+    ↓
+Answer
 ```
 
 ### Research
 
 ```text
-User question → Supervisor → Query Contextualization → Research Agent
-→ Document Search → Research Evaluator
-                         │
-              More evidence required ──→ Research Agent
-                         │
-                 Sufficient evidence
-                         ↓
-                      Response
+User question
+    ↓
+Supervisor
+    ↓
+Contextualization when required
+    ↓
+Research Agent
+    ↓
+MCP / enterprise search
+    ↓
+Structured analysis when appropriate
+    ↓
+Research Evaluator
+    ↓
+More evidence required? ── Yes ──→ Follow-up search
+    │
+    No
+    ↓
+Response Agent
+    ↓
+Answer
 ```
 
-Research is limited to a configured maximum number of iterations to avoid unnecessary repeated searches.
+Research is bounded by a configured maximum number of iterations.
 
 ## Authentication and Authorization
 
@@ -126,7 +153,56 @@ Dense and sparse scores are normalized and combined:
 hybrid_score = 0.7 × dense_score + 0.3 × sparse_score
 ```
 
-The highest-ranked documents are supplied to the response workflow.
+The highest-ranked authorized evidence is supplied to the response workflow.
+
+## MCP Integration
+
+The application uses a streamable HTTP MCP client to communicate with the MCP server.
+
+```text
+Research Agent
+       │
+       ▼
+   MCP Client
+       │
+       │ Streamable HTTP
+       ▼
+   MCP Server
+       │
+       ├── search_documents
+       │
+       └── analyze_documents
+```
+
+The MCP boundary validates:
+
+- non-empty queries
+- known user roles
+- `top_k` limits
+- access filters
+- supported analysis operations
+
+The MCP client applies a configurable timeout and converts dependency failures into controlled application errors.
+
+## Structured Analysis
+
+The MCP analysis tool provides constrained deterministic operations over retrieved documents:
+
+- `count`
+- `group_by`
+- `percentage`
+- `latest`
+- `earliest`
+
+The analysis operates on documents already retrieved for the request rather than allowing arbitrary user-supplied Python execution.
+
+This is especially useful for questions such as:
+
+```text
+How many payment incidents occurred in 2025?
+Which incident was the most recent?
+What percentage of incidents belong to each category?
+```
 
 ## Conversation Context
 
@@ -140,7 +216,7 @@ Assistant: ... INC-2025-001 ... INC-2025-017
 User: Which was the most recent?
 ```
 
-The contextualization agent can transform the follow-up into a self-contained query such as:
+The contextualization agent transforms the follow-up into a self-contained query such as:
 
 ```text
 What was the most recent payment incident reported in 2025?
@@ -159,6 +235,74 @@ The most recent incident occurred on 22 May 2025 [INC-2025-017].
 ```
 
 Generated citations are validated against documents actually retrieved for the request.
+
+## Rate Limiting
+
+The API uses a per-user token-bucket rate limiter.
+
+```text
+Request
+   │
+   ▼
+Token Bucket
+   │
+   ├── Token available → Continue
+   │
+   └── No token → Controlled rejection
+```
+
+Capacity and refill behavior are configurable.
+
+## Error Handling
+
+External dependencies are treated as explicit failure boundaries.
+
+Examples include:
+
+```text
+LLM Failure
+    ↓
+Controlled application error
+
+Pinecone Failure
+    ↓
+Retrieval failure / graceful handling
+
+MCP Failure
+    ↓
+Informative tool failure
+
+MCP Timeout
+    ↓
+Controlled timeout error
+
+Invalid Request
+    ↓
+Validation error
+
+Unauthorized Tool
+    ↓
+Authorization rejection
+```
+
+Internal exceptions and implementation details should not be exposed directly to users.
+
+## Observability
+
+LangSmith tracing can be enabled through environment configuration.
+
+The system is designed to make important execution steps observable, including:
+
+- supervisor routing
+- contextualization
+- retrieval
+- research iterations
+- MCP calls
+- structured analysis
+- response generation
+- citation validation
+
+The Streamlit interface provides a simplified user-facing execution view rather than exposing internal reasoning or chain-of-thought.
 
 ## Technology Stack
 
@@ -181,6 +325,7 @@ Generated citations are validated against documents actually retrieved for the r
 - Pinecone
 - BM25 / `rank-bm25`
 - Hybrid retrieval
+- Embeddings
 
 ### Authentication
 
@@ -192,9 +337,10 @@ Generated citations are validated against documents actually retrieved for the r
 
 - Streamlit
 
-### Research / Integration
+### Integration / Tools
 
 - MCP
+- Structured Python analysis
 
 ### Development
 
@@ -215,14 +361,21 @@ enterprise-ai-assistant/
 │   │   ├── response.py
 │   │   └── state.py
 │   ├── api/
-│   │   └── routes/
+│   │   ├── routes/
+│   │   └── rate_limit.py
 │   ├── auth/
 │   ├── db/
 │   ├── rag/
 │   └── mcp/
+├── mcp_server/
 ├── data/
+├── specs/
+│   ├── 001-foundation.md
+│   ├── 002-production-hardening.md
+│   └── 003-research-and-analysis.md
 ├── tests/
 ├── streamlit_app.py
+├── architecture.md
 ├── pyproject.toml
 └── README.md
 ```
@@ -251,8 +404,6 @@ pip install -e ".[dev]"
 ```
 
 ### Environment Variables
-
-The application uses a `.env` file for backend configuration.
 
 Create a `.env` file in the project root:
 
@@ -284,11 +435,15 @@ LANGSMITH_PROJECT=enterprise-ai-assistant
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 ```
 
-The application also provides development defaults for several configuration values through `app/config.py`.
-
-Never commit `.env`, API keys, client secrets, or other credentials to the repository.
+**Never commit `.env`, API keys, client secrets, or other credentials to the repository.**
 
 ## Running the Application
+
+### Start MCP Server
+
+```bash
+python -m mcp_server.server
+```
 
 ### Start FastAPI
 
@@ -306,6 +461,7 @@ Default local endpoints:
 
 - Streamlit: `http://localhost:8501`
 - FastAPI: `http://localhost:8000`
+- MCP: `http://127.0.0.1:8001/mcp`
 
 ## Testing
 
@@ -318,8 +474,10 @@ pytest
 Run Ruff:
 
 ```bash
-ruff check app tests streamlit_app.py
+ruff check mcp_server app tests streamlit_app.py
 ```
+
+Both should pass before submission.
 
 ## Example Questions
 
@@ -329,18 +487,10 @@ ruff check app tests streamlit_app.py
 What caused the payment gateway failure?
 ```
 
-```text
-What is the payment API architecture?
-```
-
 ### Research
 
 ```text
 What recurring factors caused payment incidents in 2025?
-```
-
-```text
-Compare the payment incidents and identify common causes.
 ```
 
 ### Follow-up
@@ -351,6 +501,12 @@ Which was the most recent?
 What was its root cause?
 ```
 
+### Structured Analysis
+
+```text
+How many payment incidents occurred in 2025?
+```
+
 ### Out of Scope
 
 ```text
@@ -359,14 +515,34 @@ What is the capital of France?
 
 This should be identified as outside the enterprise knowledge-base scope rather than answered using external knowledge.
 
-## Design Considerations
+## Spec-Driven Development
 
-The application separates routing, contextualization, retrieval, research, and response generation so each responsibility can be independently tested and extended.
+The project uses version-controlled specifications to drive incremental implementation.
 
-Security is enforced at the retrieval layer rather than relying solely on the response model to avoid exposing unauthorized documents.
+Each feature increment follows:
 
-Hybrid retrieval combines semantic understanding with exact keyword matching, which is particularly useful for enterprise documents containing identifiers and technical terminology.
+```text
+Specification
+     ↓
+Acceptance Criteria
+     ↓
+Implementation
+     ↓
+Automated Tests
+     ↓
+Validation
+```
+
+Current specifications:
+
+- `specs/001-foundation.md` — original system requirements and acceptance criteria.
+- `specs/002-production-hardening.md` — security, rate limiting, validation, timeout, and failure-handling increments.
+- `specs/003-research-and-analysis.md` — research, MCP, contextual follow-up, structured analysis, evidence aggregation, and citation behavior.
+
+The specifications are kept alongside the implementation so design intent and delivered behavior can be reviewed together.
 
 ## Current Status
 
-The core enterprise assistant workflow is implemented and covered by automated tests. The application currently supports authenticated enterprise users, role-based document access, hybrid document retrieval, research workflows, contextual follow-up questions, citation validation, streaming responses, persistent conversations, and automated testing/linting.
+The core enterprise assistant workflow is implemented and covered by automated tests and linting.
+
+The application currently supports authenticated enterprise users, role-based document access, hybrid document retrieval, research workflows, MCP integration, contextual follow-up questions, citation validation, streaming responses, persistent conversations, per-user rate limiting, dependency failure handling, structured analysis, LangSmith observability, and automated testing/linting.

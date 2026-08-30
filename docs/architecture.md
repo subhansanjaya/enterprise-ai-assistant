@@ -1,21 +1,22 @@
 # Enterprise AI Assistant — Architecture
 
-## 1. Architecture Overview
+## 1. Overview
 
-The system is designed as a modular AI application consisting of:
+The system is a modular enterprise AI application composed of:
 
-* Streamlit presentation layer
-* FastAPI application/API layer
-* LangGraph agent orchestration layer
-* Retrieval and RAG layer
-* Enterprise tool layer
-* Security and authorization layer
-* Conversational memory
-* Observability through LangSmith
+- Streamlit presentation
+- FastAPI API
+- LangGraph agent orchestration
+- Hybrid RAG
+- MCP tool integration
+- Keycloak authentication and RBAC
+- PostgreSQL conversation persistence
+- Per-user rate limiting
+- Dependency failure handling
+- Citation validation
+- LangSmith observability
 
-The architecture intentionally separates application concerns from AI orchestration, retrieval, tools and security.
-
----
+The architecture separates presentation, API, orchestration, retrieval, tools, security, persistence, and infrastructure concerns.
 
 ## 2. High-Level Architecture
 
@@ -27,63 +28,54 @@ The architecture intentionally separates application concerns from AI orchestrat
                                       ▼
                            ┌──────────────────────┐
                            │      Streamlit       │
-                           │                      │
-                           │ Chat Interface       │
-                           │ Agent Activity       │
-                           │ Streaming Responses  │
+                           │ Chat / Activity UI   │
                            └──────────┬───────────┘
-                                      │
-                                      │ HTTP
+                                      │ HTTP / SSE
                                       ▼
                            ┌──────────────────────┐
                            │       FastAPI        │
-                           │                      │
-                           │ Authentication       │
-                           │ Request Validation   │
+                           │ Auth / Validation    │
                            │ Rate Limiting        │
                            │ Error Handling       │
                            └──────────┬───────────┘
                                       │
                                       ▼
-                  ┌────────────────────────────────────┐
-                  │             LangGraph              │
-                  │                                    │
-                  │          Supervisor Agent          │
-                  │                 │                  │
-                  │          ┌──────┴──────┐           │
-                  │          ▼             ▼           │
-                  │     Retrieval       Research      │
-                  │       Agent           Agent        │
-                  │          │             │            │
-                  │          └──────┬──────┘            │
-                  │                 ▼                  │
-                  │          Response Agent            │
-                  └─────────────────┬──────────────────┘
-                                    │
-                  ┌─────────────────┼─────────────────┐
-                  │                 │                 │
-                  ▼                 ▼                 ▼
-           ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-           │  Pinecone   │  │ MCP Server  │  │   Python    │
-           │             │  │             │  │   Analysis  │
-           │ Hybrid RAG  │  │ Enterprise  │  │    Tool     │
-           │             │  │ Data        │  │             │
-           └─────────────┘  └─────────────┘  └─────────────┘
+                           ┌──────────────────────┐
+                           │      LangGraph       │
+                           │      Supervisor      │
+                           └──────────┬───────────┘
+                                      │
+                   ┌──────────────────┼──────────────────┐
+                   ▼                  ▼                  ▼
+             Context Agent      Retrieval Agent    Research Agent
+                   │                  │                  │
+                   │                  ▼                  ▼
+                   │             Hybrid RAG          MCP Client
+                   │                  │                  │
+                   └──────────────────┴──────────────────┘
+                                      │
+                                      ▼
+                               Response Agent
+                                      │
+                                      ▼
+                               Citation Validation
+                                      │
+                                      ▼
+                                  Final Answer
 
+        ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+        │   Pinecone     │  │  PostgreSQL    │  │  LangSmith     │
+        │ Vector Search  │  │ Conversations  │  │  Tracing       │
+        └────────────────┘  └────────────────┘  └────────────────┘
 
-        ┌───────────────────────────────────────────────┐
-        │              Cross-Cutting Services           │
-        │                                               │
-        │ Security │ RBAC │ Guardrails │ Memory        │
-        │ Structured Logging │ LangSmith Observability │
-        └───────────────────────────────────────────────┘
+                              ┌────────────────┐
+                              │   MCP Server   │
+                              │ Search +       │
+                              │ Analysis Tools │
+                              └────────────────┘
 ```
 
----
-
 ## 3. Request Flow
-
-A typical request follows this flow:
 
 ```text
 User
@@ -94,686 +86,471 @@ Streamlit
   ▼
 FastAPI
   │
-  ├── Authenticate user
-  │
-  ├── Validate request
-  │
-  ├── Apply rate limit
-  │
-  ▼
-LangGraph
+  ├── Authenticate
+  ├── Validate
+  ├── Rate limit
   │
   ▼
 Supervisor
   │
-  ├───────────────┐
-  ▼               ▼
-Retrieval       Research
-  │               │
-  │               ├── Search
-  │               ├── Decompose
-  │               ├── Analyze
-  │               └── Aggregate
-  │               │
-  └───────┬───────┘
-          ▼
-   Response Agent
+  ├── general ────────────────► Response
+  │
+  ├── out_of_scope ──────────► Response
+  │
+  ├── knowledge_search
+  │       │
+  │       ▼
+  │   Contextualization
+  │       │
+  │       ▼
+  │   Retrieval
+  │       │
+  │       ▼
+  │   Response
+  │
+  └── research
           │
           ▼
-   Citation Validation
+      Contextualization
           │
           ▼
-      Final Answer
+      Research Agent
+          │
+          ├── MCP Search
+          │
+          ├── Structured Analysis
           │
           ▼
-      Streamlit
+      Research Evaluator
+          │
+          ├── insufficient → follow-up search
+          │
+          └── sufficient → Response
 ```
-
----
 
 ## 4. Presentation Layer
 
-### Streamlit
-
-Streamlit provides the lightweight user interface.
+Streamlit provides the user interface.
 
 Responsibilities:
 
-* Display conversation history.
-* Accept user messages.
-* Display streaming responses.
-* Display agent activity.
-* Display retrieval status.
-* Display tool execution status.
-* Display validation status.
-* Display citations.
+- conversation display
+- message input
+- streaming response display
+- activity/status display
+- citations and source information
 
-The frontend intentionally prioritizes transparency and functionality over visual design.
-
----
+The frontend does not enforce enterprise authorization; authorization remains a backend concern.
 
 ## 5. API Layer
 
-### FastAPI
-
-FastAPI acts as the application boundary between the frontend and the AI orchestration system.
+FastAPI is the application boundary.
 
 Responsibilities:
 
-* Expose asynchronous API endpoints.
-* Authenticate users.
-* Validate incoming requests.
-* Apply rate limiting.
-* Invoke the LangGraph workflow.
-* Handle application exceptions.
-* Return structured responses/events.
+- authentication dependencies
+- request validation
+- per-user rate limiting
+- conversation loading/persistence
+- LangGraph invocation
+- streaming response delivery
+- controlled HTTP errors
 
-The API layer should not contain agent-specific reasoning logic.
+The API layer does not contain agent reasoning logic.
 
----
-
-## 6. Agent Orchestration Layer
-
-### LangGraph
-
-LangGraph is responsible for orchestrating the specialized agents.
-
-The initial graph contains:
-
-```text
-Supervisor
-    │
-    ├── Retrieval Agent
-    │
-    ├── Research Agent
-    │
-    └── Response Agent
-```
+## 6. LangGraph Layer
 
 ### Supervisor
 
-The Supervisor:
+The supervisor classifies requests into:
 
-1. Understands the user's intent.
-2. Determines the required workflow.
-3. Routes requests to specialized agents.
-4. Controls unnecessary tool execution.
+- `general`
+- `knowledge_search`
+- `research`
+- `out_of_scope`
 
-### Retrieval Agent
+It also determines whether the latest question depends on previous conversation context.
 
-The Retrieval Agent:
+### Contextualization
 
-1. Creates or receives a retrieval query.
-2. Searches the organizational knowledge base.
-3. Applies metadata filters.
-4. Enforces access constraints.
-5. Returns ranked evidence.
-
-### Research Agent
-
-The Research Agent handles complex questions.
-
-It can:
-
-1. Create a research plan.
-2. Decompose a large question.
-3. Retrieve targeted document groups.
-4. Analyze groups independently.
-5. Repeat retrieval when required.
-6. Aggregate findings.
-
-This provides the simplified RLM behavior required by the assessment.
-
-### Response Agent
-
-The Response Agent:
-
-1. Receives relevant evidence.
-2. Uses conversation context.
-3. Produces the final answer.
-4. Includes supporting citations.
-5. Avoids unsupported claims.
-
----
-
-## 7. Shared Agent State
-
-Agents communicate through explicit LangGraph state.
-
-Conceptually:
-
-```text
-AgentState
-
-├── messages
-├── user_id
-├── user_role
-├── intent
-├── retrieved_documents
-├── research_results
-├── tool_calls
-├── validation_results
-└── final_answer
-```
-
-Typed state will be preferred to make agent transitions explicit and easier to test.
-
----
-
-## 8. Retrieval Architecture
-
-The retrieval system uses hybrid search.
-
-```text
-                    User Query
-                        │
-              ┌─────────┴─────────┐
-              ▼                   ▼
-       Dense Retrieval      Sparse Retrieval
-              │                   │
-              │                   │
-              └─────────┬─────────┘
-                        ▼
-                 Hybrid Ranking
-                        │
-                        ▼
-                Access Filtering
-                        │
-                        ▼
-                  Top Evidence
-```
-
-### Dense Retrieval
-
-Embedding-based semantic retrieval.
-
-Useful when the query expresses a concept differently from the wording in the documents.
-
-### Sparse Retrieval
-
-Keyword-based retrieval.
-
-Useful for:
-
-* Error codes
-* Incident identifiers
-* Service names
-* Product names
-* Exact terminology
-
-### Hybrid Ranking
-
-Dense and sparse scores are combined to produce a final ranking.
-
-The exact weighting will be configurable and documented as an implementation decision.
-
----
-
-## 9. Pinecone
-
-Pinecone provides the vector database for the knowledge retrieval layer.
-
-Documents will be represented as chunks with associated metadata.
+Contextualization converts dependent follow-up questions into self-contained enterprise queries.
 
 Example:
 
-```json
-{
-  "document_id": "INC-2025-001",
-  "document_type": "incident",
-  "department": "payments",
-  "access_level": "internal",
-  "created_date": "2025-01-01"
-}
+```text
+Previous:
+What payment incidents happened in 2025?
+
+Follow-up:
+Which was the most recent?
+
+Rewritten:
+What was the most recent payment incident reported in 2025?
 ```
 
-Metadata filtering will be used to prevent retrieval of documents outside the user's permitted scope.
+### Retrieval Agent
 
-Namespaces may be used to logically isolate document collections where appropriate.
+The retrieval agent:
 
----
+1. obtains the contextualized query
+2. calls the retrieval service
+3. applies role-based filtering
+4. returns ranked evidence
 
-## 10. Document Ingestion
+### Research Agent
 
-The ingestion pipeline will initially operate on mock enterprise documents.
+The research agent:
+
+1. contextualizes the research question
+2. searches enterprise evidence through MCP
+3. tracks retrieved chunks
+4. avoids counting duplicate chunks as new evidence
+5. optionally invokes structured analysis
+6. maintains research iteration state
+
+### Research Evaluator
+
+The evaluator decides whether evidence is sufficient.
+
+If not sufficient, it can produce one focused follow-up query.
+
+Research is bounded by `MAX_RESEARCH_ITERATIONS`.
+
+### Response Agent
+
+The response agent generates the final answer from supplied evidence and validates citations for knowledge-search and research responses.
+
+## 7. Shared Agent State
+
+The shared state contains:
 
 ```text
-Documents
-    │
-    ▼
-Document Loader
-    │
-    ▼
-Text Extraction
-    │
-    ▼
-Chunking
-    │
-    ▼
-Metadata Enrichment
-    │
-    ▼
-Embeddings
-    │
-    ▼
-Pinecone
+messages
+user_id
+user_roles
+contextualized_query
+requires_context
+research_query
+research_new_documents
+research_evaluation
+intent
+retrieved_documents
+research_results
+research_queries
+research_iteration
+final_answer
+analysis_result
 ```
 
-Initial document categories:
+Explicit state keeps agent transitions testable.
 
-* Incident reports
-* Architecture documents
-* Operational runbooks
-* Product specifications
-
----
-
-## 11. RLM Architecture
-
-The Research Agent implements a simplified recursive/decomposed research workflow.
+## 8. Retrieval Architecture
 
 ```text
-                 Complex Question
-                        │
-                        ▼
-                 Research Planner
-                        │
-                        ▼
-                 Search Plan
-                        │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-       Batch 1       Batch 2       Batch 3
-          │             │             │
-          ▼             ▼             ▼
-       Analyze        Analyze        Analyze
-          │             │             │
-          └─────────────┼─────────────┘
-                        ▼
-                  Aggregation
-                        │
-                        ▼
-                  Response Agent
+                     User Query
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+       Dense Retrieval       Sparse Retrieval
+              │                     │
+              │                     │
+              └──────────┬──────────┘
+                         ▼
+                  Hybrid Ranking
+                         │
+                         ▼
+                  Access Filtering
+                         │
+                         ▼
+                    Top Evidence
 ```
 
-The objective is to avoid placing an entire document collection into a single LLM context.
+Dense retrieval provides semantic matching. BM25 provides lexical matching for exact enterprise terms and identifiers.
 
-Instead, the system performs targeted exploration, analysis and aggregation.
+The hybrid ranker normalizes the two score sets and combines them using configured weights.
 
----
+## 9. Authorization
 
-## 12. Tool Architecture
+Authentication uses Keycloak/OpenID Connect.
 
-The system exposes narrowly scoped tools.
-
-### Knowledge Search
+Initial role mapping:
 
 ```text
-Agent
-  │
-  ▼
-Knowledge Search Tool
-  │
-  ▼
-Hybrid Retrieval
+viewer
+  └── internal
+
+analyst
+  ├── internal
+  └── restricted
+
+admin
+  ├── internal
+  ├── restricted
+  └── confidential
 ```
 
-### Python Analysis
+The authenticated user's roles are passed into retrieval/tool operations.
+
+Authorization is enforced by application code and retrieval filters, not by the LLM.
+
+## 10. MCP Architecture
 
 ```text
-Agent
-  │
-  ▼
-Python Analysis Tool
-  │
-  ▼
-Deterministic Analysis
+Research Agent
+      │
+      ▼
+  MCP Client
+      │
+      │ Streamable HTTP
+      ▼
+  MCP Server
+      │
+      ├── search_documents
+      │
+      └── analyze_documents
 ```
 
-This tool is intended for structured calculations rather than asking the LLM to perform complex numerical analysis itself.
+### `search_documents`
 
-### MCP
+Validates:
+
+- query
+- roles
+- role membership
+- `top_k`
+
+Then applies the role-derived access filter before searching the enterprise knowledge base.
+
+### `analyze_documents`
+
+Provides constrained structured analysis:
 
 ```text
-LangGraph
-    │
-    ▼
-MCP Client
-    │
-    ▼
-MCP Server
-    │
-    ├── Employee Directory
-    ├── Service Catalog
-    └── Incident Records
+count
+group_by
+percentage
+latest
+earliest
 ```
 
-The MCP server provides dummy enterprise data for the proof of concept.
+The analysis input consists of already retrieved documents.
 
----
+Arbitrary Python code execution is intentionally not exposed.
 
-## 13. Security Architecture
+## 11. Structured Analysis
 
-Security is implemented as a separate concern rather than delegated to the LLM.
+The analysis tool is intended for deterministic calculations over structured retrieved data.
+
+Examples:
 
 ```text
-User Request
-     │
-     ▼
-Authentication
-     │
-     ▼
-RBAC
-     │
-     ▼
-Input Validation
-     │
-     ▼
-Prompt Injection Protection
-     │
-     ▼
-LangGraph
-     │
-     ▼
-Tool Authorization
-     │
-     ▼
-Tool Execution
+How many incidents are there?
+What percentage of records belong to each type?
+Which record is the latest?
+Which record is the earliest?
 ```
 
-### Important Security Principle
+This avoids relying on the LLM to perform basic arithmetic or date selection when deterministic computation is more reliable.
 
-The LLM may request a tool, but it cannot authorize itself to execute that tool.
-
-Authorization is enforced by application code.
-
----
-
-## 14. Role-Based Access Control
-
-The initial implementation uses three roles:
+## 12. Research / RLM Workflow
 
 ```text
-Viewer
-Analyst
-Administrator
+Complex Question
+      │
+      ▼
+Contextualization
+      │
+      ▼
+Research Agent
+      │
+      ▼
+MCP Search
+      │
+      ▼
+Structured Analysis when appropriate
+      │
+      ▼
+Research Evaluator
+      │
+      ├── insufficient → focused follow-up search
+      │
+      └── sufficient → Response
 ```
 
-Conceptually:
+Research terminates when sufficient evidence is available, no new evidence is found, the iteration limit is reached, or no valid follow-up query exists.
 
-```text
-                 ┌───────────┐
-                 │   User    │
-                 └─────┬─────┘
-                       │
-                       ▼
-                 ┌───────────┐
-                 │    RBAC   │
-                 └─────┬─────┘
-                       │
-          ┌────────────┼────────────┐
-          ▼            ▼            ▼
-       Viewer       Analyst    Administrator
-```
+## 13. Conversation Persistence
 
-Permissions are checked before executing protected tools.
-
----
-
-## 15. Prompt Injection Protection
-
-Retrieved documents are treated as untrusted content.
-
-The system should distinguish between:
-
-```text
-System Instructions
-       ≠
-User Input
-       ≠
-Retrieved Content
-       ≠
-Tool Output
-```
-
-Instructions found inside retrieved documents must not automatically become agent instructions.
-
-Security checks should address:
-
-* Instruction override attempts
-* Data exfiltration attempts
-* Tool abuse
-* Malicious tool parameters
-
----
-
-## 16. Memory
-
-Conversation memory is initially session-based.
-
-```text
-User
- │
- ▼
-Conversation
- │
- ├── Previous Questions
- ├── Previous Answers
- └── Relevant Context
- │
- ▼
-Current Agent Request
-```
-
-This provides multi-turn conversational context without introducing unnecessary persistent infrastructure for the POC.
-
----
-
-## 17. Observability
-
-LangSmith provides distributed tracing across the AI workflow.
-
-A typical trace should represent:
+PostgreSQL stores:
 
 ```text
 Conversation
-    │
-    ▼
-Supervisor
-    │
-    ├── Retrieval Agent
-    │      └── Pinecone Search
-    │
-    ├── Research Agent
-    │      ├── Search
-    │      ├── Analysis
-    │      └── Aggregation
-    │
-    └── Response Agent
+ ├── id
+ ├── user_id
+ ├── title
+ ├── created_at
+ └── updated_at
+
+Message
+ ├── id
+ ├── conversation_id
+ ├── role
+ ├── content
+ └── created_at
 ```
 
-The system should record:
+Conversation lookup is scoped to the authenticated user's ID.
 
-* Conversation execution
-* Agent transitions
-* Tool calls
-* Retrieval operations
-* Important validation operations
+## 14. Streaming
 
-The Streamlit interface will provide a simplified human-readable representation of this execution.
+```text
+FastAPI
+   │
+   ▼
+Preparation Graph
+   │
+   ▼
+Response Agent
+   │
+   ▼
+LLM Streaming
+   │
+   ▼
+SSE token events
+   │
+   ▼
+Streamlit
+```
 
----
+The completed response is persisted after streaming completes.
 
-## 18. Rate Limiting
+## 15. Rate Limiting
 
-A token bucket is used at the API boundary.
+A per-user token bucket protects the API.
 
 ```text
 Request
    │
    ▼
+Authenticated User
+   │
+   ▼
 Token Bucket
    │
-   ├── Token available → Continue
+   ├── available → continue
    │
-   └── No token → Reject gracefully
+   └── exhausted → reject
 ```
 
-Limits are configured per user.
+This limits abuse while keeping the rate-limit scope aligned with authenticated users.
 
----
+## 16. Failure Handling
 
-## 19. Error Handling
-
-External dependencies are treated as failure boundaries.
-
-Examples:
+External dependencies are treated as explicit failure boundaries.
 
 ```text
-LLM Failure
-    ↓
-Controlled error response
+OpenAI
+  ↓
+timeout / exception handling
 
-Pinecone Failure
-    ↓
-Retrieval error / graceful degradation
-
-MCP Failure
-    ↓
-Tool failure / informative response
-
-Tool Timeout
-    ↓
-Timeout handling
-
-Invalid Request
-    ↓
-Validation error
-
-Unauthorized Tool
-    ↓
-Authorization rejection
-```
-
-The application should avoid exposing internal exceptions directly to users.
-
----
-
-## 20. Observability and Transparency in the UI
-
-The Streamlit activity panel provides a simplified execution timeline.
-
-Example:
-
-```text
-✓ Request received
-
-✓ User authenticated
-✓ Request validated
-
-→ Supervisor
-  Intent: knowledge_search
-
-→ Retrieval Agent
-  Hybrid search started
-
-→ Pinecone
-  8 candidates retrieved
-
-✓ Access filtering completed
-
-→ Response Agent
-  Generating answer
-
-✓ Citation validation completed
-
-✓ Response delivered
-```
-
-This is intentionally a user-facing representation rather than exposing raw internal reasoning or hidden chain-of-thought.
-
----
-
-## 21. Deployment
-
-For the proof of concept, the application should be runnable locally.
-
-The target deployment structure is:
-
-```text
-┌───────────────────────────────────────┐
-│            Local Environment          │
-│                                       │
-│  Streamlit                            │
-│      │                                │
-│      ▼                                │
-│  FastAPI                              │
-│      │                                │
-│      ▼                                │
-│  LangGraph                            │
-│      │                                │
-│  ┌───┼───────────┐                    │
-│  ▼   ▼           ▼                    │
-│ Pinecone MCP   Python Tool             │
-│                                       │
-└───────────────────────────────────────┘
-
-External Services:
+MCP
+  ↓
+timeout / exception handling
 
 Pinecone
-LangSmith
-LLM Provider
+  ↓
+retrieval failure handling
+
+Validation
+  ↓
+controlled request errors
+
+Authorization
+  ↓
+controlled access rejection
 ```
 
-Containerization may be added later if time permits.
+The application converts dependency failures into controlled errors and avoids exposing raw internal exceptions to users.
 
----
+## 17. Citation Integrity
 
-## 22. Key Design Decisions
+The response workflow requires document citations for knowledge-based answers.
 
-### Decision 1 — LangGraph
+A citation is valid only when the referenced document ID is available in the response state's retrieved evidence.
 
-Chosen because the assessment explicitly requires LangGraph and multiple specialized agents.
+This provides a basic defense against unsupported source references.
 
-### Decision 2 — FastAPI
+## 18. Observability
 
-Provides a clean asynchronous API boundary between the UI and AI orchestration.
+LangSmith tracing can capture the major AI workflow stages:
 
-### Decision 3 — Pinecone
+```text
+Supervisor
+  ↓
+Contextualization
+  ↓
+Retrieval / Research
+  ↓
+MCP
+  ↓
+Analysis
+  ↓
+Response
+  ↓
+Citation Validation
+```
 
-Chosen because the assessment explicitly requires Pinecone and hybrid retrieval.
+Streamlit presents simplified activity information without exposing chain-of-thought.
 
-### Decision 4 — Session Memory
+## 19. Security Principles
 
-Chosen for the POC because it demonstrates conversational memory without introducing unnecessary persistence infrastructure.
+1. Authenticate before protected operations.
+2. Authorize through application code.
+3. Filter enterprise retrieval by role.
+4. Treat retrieved content as untrusted data.
+5. Keep MCP tools narrowly scoped.
+6. Validate tool inputs.
+7. Limit autonomous research iterations.
+8. Avoid arbitrary code execution.
+9. Do not expose credentials in source control.
+10. Avoid returning raw internal exceptions to users.
 
-### Decision 5 — Hardcoded Authentication
+## 20. Deployment
 
-Chosen because the assessment explicitly permits hardcoded users and roles.
+The current implementation is optimized for local proof-of-concept execution.
 
-### Decision 6 — Simplified RLM
+```text
+Streamlit
+    │
+    ▼
+FastAPI
+    │
+    ▼
+LangGraph
+    │
+    ├── RAG → Pinecone
+    ├── MCP → MCP Server
+    └── Memory → PostgreSQL
 
-Chosen because the assessment permits a simplified RLM implementation while requiring the concept to be demonstrated.
+External:
+- OpenAI
+- Keycloak
+- Pinecone
+- LangSmith
+```
 
-### Decision 7 — Mock Enterprise Data
+The components can later be containerized and deployed independently without changing the core application boundaries.
 
-Chosen because the assessment explicitly permits generated mock data.
+## 21. Architectural Principles
 
-### Decision 8 — Application-Level Authorization
-
-Authorization is intentionally kept outside the LLM to ensure the agent cannot bypass role restrictions.
-
----
-
-## 23. Architectural Principles
-
-1. Separate presentation, API, orchestration, retrieval and infrastructure concerns.
+1. Separate presentation, API, orchestration, retrieval, tools, and infrastructure.
 2. Keep authorization outside the LLM.
 3. Treat retrieved content as untrusted.
 4. Keep tools narrowly scoped.
-5. Use explicit typed agent state.
-6. Make agent execution observable.
-7. Prefer deterministic computation for structured analysis.
+5. Use explicit agent state.
+6. Make execution observable.
+7. Prefer deterministic analysis for structured calculations.
 8. Fail gracefully at external dependency boundaries.
-9. Keep the POC simple enough to explain and demonstrate.
-10. Optimize for demonstrable enterprise architecture rather than unnecessary infrastructure complexity.
+9. Bound autonomous research.
+10. Keep specifications version controlled.
+11. Validate implementation increments against acceptance criteria.
