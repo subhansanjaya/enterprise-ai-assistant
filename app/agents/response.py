@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 
 from langchain_openai import ChatOpenAI
@@ -125,9 +126,48 @@ def build_response_prompt(
 async def response_agent(
     state: AgentState,
 ) -> AgentState:
+    retrieval_error = state.get(
+        "retrieval_error",
+        "",
+    )
+
+    if retrieval_error:
+        return {
+            **state,
+            "final_answer": (
+                "I'm unable to access the enterprise knowledge base "
+                "right now. Please try again later."
+            ),
+        }
+
     prompt = build_response_prompt(state)
 
-    response = await llm.ainvoke(prompt)
+    try:
+        response = await asyncio.wait_for(
+            llm.ainvoke(prompt),
+            timeout=settings.llm_timeout_seconds,
+        )
+    except TimeoutError:
+        return {
+            **state,
+            "final_answer": (
+                "The AI service took too long to respond. "
+                "Please try again later."
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001
+        print(
+            "LLM ERROR:",
+            str(exc),
+        )
+
+        return {
+            **state,
+            "final_answer": (
+                "The AI service is currently unavailable. "
+                "Please try again later."
+            ),
+        }
 
     answer = response.content
 
@@ -163,8 +203,41 @@ async def response_agent(
 async def stream_response(
     state: AgentState,
 ) -> AsyncIterator[str]:
+    retrieval_error = state.get(
+        "retrieval_error",
+        "",
+    )
+
+    if retrieval_error:
+        yield (
+            "I'm unable to access the enterprise knowledge base "
+            "right now. Please try again later."
+        )
+        return
+
     prompt = build_response_prompt(state)
 
-    async for chunk in llm.astream(prompt):
-        if chunk.content:
-            yield chunk.content
+    try:
+        async with asyncio.timeout(
+            settings.llm_timeout_seconds
+        ):
+            async for chunk in llm.astream(prompt):
+                if chunk.content:
+                    yield chunk.content
+
+    except TimeoutError:
+        yield (
+            "The AI service took too long to respond. "
+            "Please try again later."
+        )
+
+    except Exception as exc:  # noqa: BLE001
+        print(
+            "LLM STREAM ERROR:",
+            str(exc),
+        )
+
+        yield (
+            "The AI service is currently unavailable. "
+            "Please try again later."
+        )

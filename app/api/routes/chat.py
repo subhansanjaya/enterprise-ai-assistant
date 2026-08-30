@@ -60,6 +60,7 @@ def build_state(
         "retrieved_documents": [],
         "research_results": [],
         "final_answer": "",
+        "retrieval_error": "",
         "research_new_documents": 0,
         "research_evaluation": {},
     }

@@ -20,10 +20,15 @@ class PineconeService:
         self,
         vectors: list[tuple[str, list[float], dict]],
     ) -> None:
-        self._index.upsert(
-            vectors=vectors,
-            namespace=settings.pinecone_namespace,
-        )
+        try:
+            self._index.upsert(
+                vectors=vectors,
+                namespace=settings.pinecone_namespace,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "The vector database is currently unavailable."
+            ) from exc
 
     def search(
         self,
@@ -31,15 +36,26 @@ class PineconeService:
         top_k: int = 5,
         filter: dict | None = None,
     ) -> list[dict]:
-        response = self._index.query(
-            vector=vector,
-            top_k=top_k,
-            include_metadata=True,
-            namespace=settings.pinecone_namespace,
-            filter=filter,
-        )
+        try:
+            response = self._index.query(
+                vector=vector,
+                top_k=top_k,
+                include_metadata=True,
+                namespace=settings.pinecone_namespace,
+                filter=filter,
+            )
 
-        return response.matches
-    
+            return response.matches
+
+        except Exception as exc:
+            raise RuntimeError(
+                "The vector database search is currently unavailable."
+            ) from exc
+
     def describe_index_stats(self) -> dict:
-        return self._index.describe_index_stats()
+        try:
+            return self._index.describe_index_stats()
+        except Exception as exc:
+            raise RuntimeError(
+                "The vector database is currently unavailable."
+            ) from exc
