@@ -61,6 +61,7 @@ def build_state(
         "research_results": [],
         "final_answer": "",
         "retrieval_error": "",
+        "analysis_result": {},
         "research_new_documents": 0,
         "research_evaluation": {},
     }

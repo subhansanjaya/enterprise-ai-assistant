@@ -1,4 +1,5 @@
 import asyncio
+from collections import Counter
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
@@ -9,9 +10,15 @@ from app.auth.policy import (
 )
 from app.rag.knowledge_base import KnowledgeBase
 
-
 MAX_TOP_K = 10
 VALID_ROLES = set(ROLE_ACCESS_LEVELS)
+ALLOWED_ANALYSIS_OPERATIONS = {
+    "count",
+    "group_by",
+    "percentage",
+    "latest",
+    "earliest",
+}
 
 
 mcp = MCPServer(
@@ -75,6 +82,113 @@ def search_documents(
         }
         for result in results
     ]
+
+
+@mcp.tool(
+    name="analyze_documents",
+    description=(
+        "Perform safe structured analysis on documents already retrieved "
+        "from the enterprise knowledge base."
+    ),
+)
+def analyze_documents(
+    documents: list[dict],
+    operation: str,
+    field: str = "document_id",
+) -> dict:
+    operation = operation.strip().lower()
+    field = field.strip()
+
+    if operation not in ALLOWED_ANALYSIS_OPERATIONS:
+        raise ValueError(
+            "Unsupported analysis operation. "
+            f"Allowed operations: {', '.join(sorted(ALLOWED_ANALYSIS_OPERATIONS))}."
+        )
+
+    if not documents:
+        return {
+            "operation": operation,
+            "result": 0,
+        }
+
+    values = [
+        document.get(field)
+        for document in documents
+        if document.get(field) is not None
+    ]
+
+    if operation == "count":
+        return {
+            "operation": "count",
+            "field": field,
+            "result": len(documents),
+        }
+
+    if not values:
+        raise ValueError(
+            f"No documents contain the requested field: {field}."
+        )
+
+    if operation == "group_by":
+        counts = Counter(str(value) for value in values)
+
+        return {
+            "operation": "group_by",
+            "field": field,
+            "result": dict(counts),
+        }
+
+    if operation == "percentage":
+        counts = Counter(str(value) for value in values)
+        total = len(values)
+
+        percentages = {
+            key: round(
+                (count / total) * 100,
+                2,
+            )
+            for key, count in counts.items()
+        }
+
+        return {
+            "operation": "percentage",
+            "field": field,
+            "total": total,
+            "result": percentages,
+        }
+
+    dates = [
+        document.get("created_date")
+        for document in documents
+        if document.get("created_date")
+    ]
+
+    if not dates:
+        raise ValueError(
+            "No created_date values are available for date analysis."
+        )
+
+    selected_date = (
+        max(dates)
+        if operation == "latest"
+        else min(dates)
+    )
+
+    matching_documents = [
+        document
+        for document in documents
+        if document.get("created_date") == selected_date
+    ]
+
+    return {
+        "operation": operation,
+        "field": "created_date",
+        "date": selected_date,
+        "documents": [
+            document.get("document_id")
+            for document in matching_documents
+        ],
+    }
 
 
 async def main() -> None:

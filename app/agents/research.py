@@ -32,6 +32,58 @@ class ResearchEvaluation(BaseModel):
     findings: list[ResearchFinding]
 
 
+class AnalysisDecision(BaseModel):
+    required: bool
+    operation: Literal[
+        "count",
+        "group_by",
+        "percentage",
+        "latest",
+        "earliest",
+    ]
+    field: str
+
+
+async def determine_analysis(
+    question: str,
+) -> AnalysisDecision:
+    evaluator = llm.with_structured_output(
+        AnalysisDecision
+    )
+
+    response = await evaluator.ainvoke(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "Determine whether the enterprise question requires "
+                    "structured analysis of retrieved documents.\n\n"
+                    "Use analysis when the question asks for counting, "
+                    "grouping, percentages, or identifying the latest "
+                    "or earliest record.\n\n"
+                    "If structured analysis is not required, set required=false.\n\n"
+                    "Choose exactly one operation:\n"
+                    "- count\n"
+                    "- group_by\n"
+                    "- percentage\n"
+                    "- latest\n"
+                    "- earliest\n\n"
+                    "For group_by or percentage, identify the relevant "
+                    "document field.\n\n"
+                    "For latest or earliest, use created_date.\n\n"
+                    "Do not answer the question."
+                ),
+            },
+            {
+                "role": "user",
+                "content": question,
+            },
+        ]
+    )
+
+    return response
+
+
 async def research_agent(
     state: AgentState,
 ) -> AgentState:
@@ -95,6 +147,31 @@ async def research_agent(
         for document in retrieved_documents
     ]
 
+    analysis_result = state.get(
+        "analysis_result",
+        {},
+    )
+
+    if retrieved_documents:
+        analysis_decision = await determine_analysis(
+            original_query
+        )
+
+        if analysis_decision.required:
+            try:
+                analysis_result = (
+                    await mcp_client.analyze_documents(
+                        documents=retrieved_documents,
+                        operation=analysis_decision.operation,
+                        field=analysis_decision.field,
+                    )
+                )
+            except RuntimeError as exc:
+                print(
+                    "ANALYSIS ERROR:",
+                    str(exc),
+                )
+
     return {
         **state,
         "retrieved_documents": retrieved_documents,
@@ -102,6 +179,7 @@ async def research_agent(
         "research_queries": research_queries,
         "research_iteration": research_iteration,
         "research_new_documents": new_document_count,
+        "analysis_result": analysis_result,
     }
 
 
@@ -146,21 +224,16 @@ async def evaluate_research(
                 "content": (
                     "You evaluate whether an enterprise research question "
                     "has enough evidence to answer reliably.\n\n"
-
                     "Review the supplied documents and previous search queries.\n\n"
-
                     "Produce concise research findings based only on the "
                     "supplied evidence. Each finding must identify the "
                     "Document IDs that support it.\n\n"
-
                     "If the evidence is sufficient to answer the research "
                     "question reliably, set sufficient=true and leave "
                     "follow_up_query empty.\n\n"
-
                     "If the evidence is insufficient, set sufficient=false "
                     "and provide ONE focused follow-up search query that "
                     "targets genuinely missing information.\n\n"
-
                     "IMPORTANT:\n"
                     "- Do not invent facts.\n"
                     "- Do not create findings unsupported by the evidence.\n"
@@ -182,7 +255,9 @@ async def evaluate_research(
                     f"Previous search queries:\n"
                     f"{previous_queries}\n\n"
                     f"Evidence collected so far:\n"
-                    f"{evidence}"
+                    f"{evidence}\n\n"
+                    f"Structured analysis:\n"
+                    f"{state.get('analysis_result', {})}"
                 ),
             },
         ]
@@ -196,13 +271,9 @@ async def evaluate_research(
         ],
         "research_evaluation": {
             "sufficient": response.sufficient,
-            "follow_up_query": (
-                response.follow_up_query.strip()
-            ),
+            "follow_up_query": response.follow_up_query.strip(),
         },
-        "research_query": (
-            response.follow_up_query.strip()
-        ),
+        "research_query": response.follow_up_query.strip(),
     }
 
 
@@ -217,7 +288,7 @@ def route_after_research_evaluation(
 
     evaluation = state.get(
         "research_evaluation",
-        {}
+        {},
     )
 
     if evaluation.get("sufficient", False):

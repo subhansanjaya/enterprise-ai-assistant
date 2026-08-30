@@ -20,6 +20,7 @@ class AgentState(TypedDict):
     research_new_documents: int
     research_evaluation: dict
     retrieval_error: str
+    analysis_result: dict
 
     intent: Intent
 
